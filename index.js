@@ -8,13 +8,15 @@ const fastify = Fastify({
     logger: true
 })
 
+const PORT = 443
+
 fastify.get('/',(request,reply)=>{
     reply.send(
-        {message: "hello world!"}
+        {message: `Hello from port ${PORT}!`}
     )
 })
 
-fastify.listen({port:3300}, (err,adress)=>{
+fastify.listen({port:PORT}, (err,adress)=>{
  if(err){
     fastify.log.error(err)
     process.exit(1)
