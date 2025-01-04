@@ -28,7 +28,7 @@ signals.forEach((signal) => {
     })
 }); 
 
-fastify.post('api/users',{
+fastify.post('/api/users',{
     handler: async (request:FastifyRequest<{ // akkor futtatja a Fastify, ha érkezik egy POST kérés
         Body: {
             name: string,

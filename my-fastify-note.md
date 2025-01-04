@@ -25,6 +25,7 @@ Az 1 sor a request line. Ez szóközzel elválasztva 3 részből áll, melyek re
 * CRUD_operátor  
 * végpont_címe
 * http_verzió
+
 A további sorok az első üres sorig alkotják a HEADERS-t, ami key-value párokból áll, és további információkat közöl a kéréssel kapcsolatban.
 * Host: A célzott szerver címe.
 * User-Agent: A kliens szoftverének típusa és verziója.
@@ -280,3 +281,179 @@ async function main() {
 
   main();
   ~~~
+### Registering a plugin
+
+* Mi a plugin a Fastify keretrendszerben?
+
+A **plugin** a Fastify keretrendszerben egy újrafelhasználható modul vagy funkció, amely kiegészíti a szerver funkcionalitását. A Fastify pluginek fő célja a funkcionalitás modularizálása, bővítése és a kód újrafelhasználhatóságának növelése. A pluginek lehetnek saját készítésűek vagy harmadik féltől származóak.
+
+* **Jellemzők**
+1. **Modularitás:** Minden plugin egyedi funkcióval rendelkezik, például middleware-ek hozzáadása, autentikáció, adatbázis-kezelés vagy CORS támogatás.
+2. **Környezetfüggetlenség:** A plugin működése izolált, tehát a fő alkalmazás többi részétől függetlenül dolgozik.
+3. **Dekoratív API használata:** Pluginek használatával könnyen bővíthetők a Fastify objektumok, például a `fastify` példány.
+
+---
+
+* **Hogyan működik egy plugin?**
+
+A plugin egy egyszerű függvény, amely paraméterként megkapja a Fastify példányát, a konfigurációs beállításokat, és (régebbi verziókban) egy aszinkron `done` visszahívó függvényt vagy (manapság) `await` alapú async működést használ.
+
+* **Alap plugin készítése:**
+
+```javascript
+const myPlugin = async (fastify, options) => {
+    fastify.get('/example', async (request, reply) => {
+        return { hello: 'world' };
+    });
+};
+
+module.exports = myPlugin;
+```
+
+* **Plugin regisztrálása:**
+
+Egy plugint a `fastify.register()` metódussal lehet regisztrálni.
+
+```javascript
+const fastify = require('fastify')();
+
+fastify.register(require('./myPlugin')); // ez az importálás helyett van itt
+
+fastify.listen({ port: 3000 }, err => {
+    if (err) {
+        console.error(err);
+        process.exit(1);
+    }
+    console.log('Server running on http://localhost:3000');
+});
+```
+
+---
+
+## **Hasznos Fastify pluginek**
+
+A Fastify ökoszisztéma számos beépített és harmadik féltől származó plugint tartalmaz:
+
+1. **CORS (Cross-Origin Resource Sharing):**
+   ```javascript
+   fastify.register(require('@fastify/cors'), { 
+       origin: true // vagy: ['https://example.com']
+   });
+   ```
+
+2. **Adatbázis kezelése:**
+   - `@fastify/mongodb`
+   - `@fastify/postgres`
+   - `@fastify/mysql`
+   ```javascript
+   fastify.register(require('@fastify/mongodb'), {
+       url: 'mongodb://localhost:27017/mydb'
+   });
+   ```
+
+3. **Autentikáció:**
+   - `@fastify/auth`
+   - `@fastify/jwt`
+   ```javascript
+   fastify.register(require('@fastify/jwt'), {
+       secret: 'supersecret'
+   });
+   ```
+
+4. **Statikus fájlok kiszolgálása:**
+   ```javascript
+   fastify.register(require('@fastify/static'), {
+       root: path.join(__dirname, 'public'),
+       prefix: '/public/', // opcionális
+   });
+   ```
+
+5. **Formátum ellenőrzés (validation):**
+   - `@fastify/ajv-compiler`
+
+---
+
+## **Plugin készítésére vonatkozó szabványok**
+A Fastify pluginek kompatibilisek kell legyenek az **avvio** nevű Fastify-alapú keretrendszerrel. Ez biztosítja:
+- A plugin aszinkron inicializációját (`async/await`).
+- Az izolációt más pluginektől.
+
+---
+
+## **Előnyök a pluginek használatával**
+1. Könnyen újrafelhasználható modulok hozhatók létre.
+2. A kód olvashatósága és karbantarthatósága javul.
+3. Egyszerű harmadik féltől származó bővítmények integrációja.
+4. Konfigurációs paraméterek egyszerű átadása.
+
+## Route választó plugIn létrehozása
+```javascript
+async function userRoutes(fastify: FastifyInstance) {
+    // Elvár: Egy fastify példányt
+
+    fastify.post('/', { // A regisztráláskor a "prefix"-ben fogom megadni a végpont elérési útját, ezért itt csak "/" van.
+        handler: async (request: FastifyRequest<{
+            Body: {
+                name: string,
+                age: number,
+            }
+        }>, reply: FastifyReply) => {
+            
+            const body = request.body;  
+            return reply.code(201)      // Beállítjuk a HTTP válasz kódját (201 - Created).
+                        .send(body);   // A válaszban visszaküldjük a kérés body tartalmát.
+        }
+    });
+
+    fastify.log.info("User api ready.");
+}
+
+/* route választó plugIn regisztrálása */
+fastify.register(userRoutes, { prefix: '/api/users' });
+```
+
+---
+
+
+### 1. A plugin definiálása:
+```javascript
+/* route választó plugIn létrehozása */
+async function userRoutes(fastify: FastifyInstance) {
+```
+- **Mit csinál ez a sor?**
+  - Egy **aszinron funkciót** definiálunk, amely a `userRoutes` nevet kapta.
+  - A funkció egy `FastifyInstance` típusú paramétert vár, ami a Fastify alkalmazás egy példánya.
+  - Ez a funkció lesz a Fastify **pluginja**, amely új útvonalakat (route-okat) definiál.
+
+---
+
+### 2. Új útvonal regisztrálása:
+```javascript
+    fastify.post('/', {
+```
+- **Mit csinál ez a sor?**
+  - A `fastify` példányhoz egy új `POST` metódusú útvonalat adunk hozzá.
+  - Az útvonal elérési útja itt csak `/` (gyökér). Azonban a `prefix` (később definiáljuk) hozzáadásával az útvonal valójában `/api/users/` lesz.
+  - Az útvonal egy konfigurációs objektumot kap (amit a következő sorokban részletezünk).
+
+---
+
+### 6. Plugin regisztrálása kész:
+```javascript
+    fastify.log.info("User api ready.");
+}
+```
+- **Mit csinál ez a sor?**
+  - Kiírunk egy üzenetet a szerver naplójába, jelezve, hogy a `userRoutes` plugin sikeresen inicializálódott.
+
+---
+
+### 7. A plugin regisztrálása a Fastify alkalmazásba:
+```javascript
+fastify.register(userRoutes, { prefix: '/api/users' });
+```
+- **Mit csinál ez a sor?**
+  - A `userRoutes` plugint regisztráljuk a Fastify alkalmazásban.
+  - Az `options` objektumon keresztül megadjuk a pluginhoz tartozó **prefixet**: `/api/users`.
+  - Ez azt jelenti, hogy az összes, a `userRoutes`-ban definiált útvonal a `/api/users` alá lesz szervezve.
+    - Például: A `fastify.post('/')` route a regisztráció után `/api/users/` elérési út alatt lesz elérhető.
