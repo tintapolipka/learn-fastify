@@ -1,4 +1,4 @@
-import Fastify from "fastify"; // Importáljuk a Fastify factory funkciót
+import Fastify, { FastifyReply, FastifyRequest } from "fastify"; // Importáljuk a Fastify factory funkciót
 
 const fastify = Fastify({   // példányosítjuk (szokták még app-nak hívni is)
     logger: true,           // opciók közül az automatikus loggolást kérjük a default beállítással
@@ -11,6 +11,7 @@ fastify.get('/',{}, async function () { // új route-ot kell hozzáadni
     return {message: "Hello world!"}
 })
 
+/*Az alkalmazás megszakítása*/
 const signals = ["SIGINT" ,"SIGTERM"]; /*
 SIGINT: Ez a jel a terminálban az alkalmazás megszakítására (pl. Ctrl+C-vel) 
 küldött jel.
@@ -27,10 +28,27 @@ signals.forEach((signal) => {
     })
 }); 
 
+fastify.post('api/users',{
+    handler: async (request:FastifyRequest<{ // akkor futtatja a Fastify, ha érkezik egy POST kérés
+        Body: {
+            name: string,
+            age: number,
+        }
+    }>,reply: FastifyReply)=>{
+        
+        const body = request.body;  // A kliens által küldött kérés törzsét (body) eltárolja a body változóban.
+        console.log({body})
+        return reply.code(201)      // Beállítja a válasz HTTP státuszkódját 201-re (created)
+                    .send(body)     // A válasz törzsébe beírja a body tartalmát
+    }
+}
+)
+
+/*Fastyfy szerver indítása:*/
 async function main() {
     await fastify.listen({
-      port: 3000,
-      host: "0.0.0.0",
+      port: 3000,   // port
+      host: "0.0.0.0", // IP cím (alapértelmezett localhost felülírása, hogy ne csak ott legyen elérhető)
     });
   }
 
