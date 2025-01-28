@@ -457,3 +457,124 @@ fastify.register(userRoutes, { prefix: '/api/users' });
   - Az `options` objektumon keresztül megadjuk a pluginhoz tartozó **prefixet**: `/api/users`.
   - Ez azt jelenti, hogy az összes, a `userRoutes`-ban definiált útvonal a `/api/users` alá lesz szervezve.
     - Például: A `fastify.post('/')` route a regisztráció után `/api/users/` elérési út alatt lesz elérhető.
+
+# Fastify Dekorátorok
+
+A **Fastify dekorátorok** olyan eszközök, amelyek lehetővé teszik, hogy kiterjesszük a Fastify szerver vagy más Fastify objektumok funkcionalitását. Ezekkel könnyen hozzáadhatunk saját logikát, eszközöket vagy adatokat a Fastify alkalmazáshoz, amelyet az alkalmazás más részein elérhetünk.
+
+## Mi az a Fastify dekorátor?
+- A dekorátor egy metódus, amellyel új tulajdonságokat vagy funkciókat adhatunk hozzá a következőkhöz:
+  - **Fastify példány** (szerver szintű dekorátorok).
+  - **Request objektum** (kérés szintű dekorátorok).
+  - **Reply objektum** (válasz szintű dekorátorok).
+
+## Dekorátor létrehozása
+A dekorátorokat a `decorate` vagy a `decorateRequest` / `decorateReply` metódusokkal hozhatjuk létre.
+
+### Szerver szintű dekorátor
+```javascript
+fastify.decorate('utility', function () {
+  return 'Ez egy Fastify dekorátor!';
+});
+
+fastify.get('/', (request, reply) => {
+  reply.send({ message: fastify.utility() });
+});
+```
+
+### Kérés szintű dekorátor
+```javascript
+fastify.decorateRequest('userData', null);
+
+fastify.addHook('onRequest', (request, reply, done) => {
+  request.userData = { id: 123, name: 'John Doe' }; // Egyedi adatok hozzáadása a kéréshez
+  done();
+});
+
+fastify.get('/user', (request, reply) => {
+  reply.send(request.userData);
+});
+```
+
+### Válasz szintű dekorátor
+```javascript
+fastify.decorateReply('success', function (data) {
+  this.type('application/json').send({ success: true, data });
+});
+
+fastify.get('/reply', (request, reply) => {
+  reply.success({ id: 1, name: 'Item' });
+});
+```
+
+## Dekorátorok szabályai
+1. **Egyszerűség**: Egy adott dekorátor nem írhatja felül egy már létező tulajdonságot vagy metódust (Fastify ezt ellenőrzi).
+2. **Hierarchia**: A dekorátorok csak abban a szegmensben érhetők el, ahol létrehozták őket, pl. plugin scope-on belül.
+
+## Mikor használd?
+- Ha ismétlődő funkcionalitást szeretnél központilag elérhetővé tenni (pl. helper metódusok).
+- Egyedi adatok hozzáadásához a kéréshez vagy válaszhoz.
+- Modulárisabb és tisztább kód érdekében.
+
+## Előnyök
+- Könnyen újrafelhasználható.
+- Egyszerű módja a Fastify funkcionalitásának kiterjesztésére.
+- Megkönnyíti a bővíthető alkalmazások írását.
+
+## Példák használatra
+- Egyedi autentikációs logika (`request.isAuthenticated()`).
+- Válasz sablonok (`reply.error()` vagy `reply.success()`).
+- Globális utility metódusok (pl. `fastify.hashPassword()`).
+
+A dekorátorokkal a Fastify alkalmazások még rugalmasabbá és skálázhatóbbá válnak, miközben a kód jól szervezett marad.
+
+# fastify.addHook és a hookok használata
+
+A `fastify.addHook` egy Fastify metódus, amely lehetővé teszi, hogy egy vagy több **hookot** (horogfüggvényt) regisztráljunk az alkalmazás különböző fázisaira. Ezek a hookok olyan speciális függvények, amelyeket a Fastify automatikusan végrehajt bizonyos események során, például egy kérés vagy válasz feldolgozása közben.
+
+## Mire való a `fastify.addHook`?
+A hookokat olyan esetekben használjuk, amikor a kérés feldolgozásának bizonyos szakaszaiban közös műveleteket szeretnénk végrehajtani, például:
+- Autentikáció.
+- Naplózás.
+- Egyedi adatok hozzáadása a kéréshez vagy válaszhoz.
+- Bármilyen előfeldolgozás vagy utófeldolgozás, amit a kérések vagy válaszok kezelése során végre kell hajtani.
+
+## Gyakori hook típusok és fázisok
+A Fastify számos hookot támogat, például:
+
+1. **`onRequest`**: A kérés érkezésekor fut, mielőtt bármi más történne.
+2. **`preHandler`**: Mielőtt a route-hoz tartozó handler futna.
+3. **`onSend`**: A válasz küldése előtt fut.
+4. **`onResponse`**: A válasz elküldése után fut.
+5. **`onError`**: Hibakezelés során fut.
+6. **`onReady`**: A szerver indulása után egyszer fut le.
+
+## Példa: `onRequest` használata
+A következő példa az `onRequest` hookot használja arra, hogy adatokat adjon hozzá a kéréshez:
+
+```javascript
+fastify.decorateRequest('userData', null);
+
+fastify.addHook('onRequest', (request, reply, done) => {
+  // Egyedi adatok hozzáadása a kérés objektumhoz
+  request.userData = { id: 123, name: 'John Doe' };
+  done(); // A következő fázisra lépés jelzése
+});
+
+fastify.get('/user', (request, reply) => {
+  // A kérés dekorált adatainak használata
+  reply.send(request.userData);
+});
+```
+
+### Mi történik itt?
+1. **`decorateRequest`**: Hozzáad egy új tulajdonságot (`userData`) a kérés objektumhoz.
+2. **`addHook`**: Az `onRequest` hook minden bejövő kérésnél lefut, és feltölti a `request.userData` tulajdonságot.
+3. **Route handler**: A dekorált adatokat (`request.userData`) a `/user` végpont handlerében elérjük.
+
+## Fontos tudnivalók a hookokról
+- A hookok **aszinkron műveleteket is támogathatnak**, ha `async` függvényt használunk, vagy `done` helyett egy `Promise`-t adunk vissza.
+- A hookok sorrendje számít: az alkalmazási sorrendben hajtódnak végre.
+- Csak a megfelelő helyen regisztrált hookok futnak (pl. egy plugin scope-on belüli hook csak az adott pluginra vonatkozik).
+
+
